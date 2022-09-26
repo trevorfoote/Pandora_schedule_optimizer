@@ -177,7 +177,6 @@ def target_vis(input_dir, target_file, gmat_file, output_dir, \
     mm = SkyCoord(x=mxx, y=myy, z=mzz, unit='km', representation_type='cartesian')
     pp = SkyCoord(x=pxx, y=pyy, z=pzz, unit='km', representation_type='cartesian')
 
-
 ### Define Constraints for each Solar system body
     Sun_constraint = sun_block * u.deg
     Moon_constraint = moon_block * u.deg
@@ -254,6 +253,3 @@ def target_vis(input_dir, target_file, gmat_file, output_dir, \
         plt.savefig(save_dir+'Observing Calendar for '
                     +target_name+'.png')
         plt.close()
-
-        
-
