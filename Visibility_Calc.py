@@ -9,7 +9,6 @@ from astropy.time import Time
 from astropy.visualization import time_support
 from datetime import datetime
 
-from mpl_toolkits import mplot3d
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 mpl.rcParams['xtick.major.size'] = 10
