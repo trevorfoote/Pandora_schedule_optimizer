@@ -6,13 +6,14 @@ import spectres
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
-from astropy.visualization import time_support
 from datetime import datetime
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 mpl.rcParams['xtick.major.size'] = 10
 mpl.rcParams['xtick.major.width'] = 3
+mpl.rcParams['xtick.minor.size'] = 5
+mpl.rcParams['xtick.minor.width'] = 1
 mpl.rcParams['ytick.major.size'] = 10
 mpl.rcParams['ytick.major.width'] = 3
 mpl.rcParams['mathtext.fontset'] = 'custom'
@@ -186,11 +187,11 @@ def target_vis(input_dir, target_file, gmat_file, output_dir, \
     # Earth_constraint = np.arctan((1.*u.earthRad)/(1.*u.earthRad+Pandora_alt)).to(u.deg)
 
 ### Import Target list
-    t_list = pd.read_csv(input_dir + target_file, sep=',')
+    target_list = pd.read_csv(input_dir + target_file, sep=',')
 
     #Cycle through targets
-    for i in range(len(t_list['Simbad Name'])):
-        target_name = t_list['Simbad Name'][i]
+    for i in range(len(target_list['Simbad Name'])):
+        target_name = target_list['Simbad Name'][i]
         target_sc = SkyCoord.from_name(target_name)
         print('Analyzing constraints for:', target_name)
 
