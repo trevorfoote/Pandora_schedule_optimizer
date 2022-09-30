@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 mpl.rcParams['xtick.major.size'] = 10
 mpl.rcParams['xtick.major.width'] = 3
+mpl.rcParams['xtick.minor.size'] = 5
+mpl.rcParams['xtick.minor.width'] = 1
 mpl.rcParams['ytick.major.size'] = 10
 mpl.rcParams['ytick.major.width'] = 3
 mpl.rcParams['mathtext.fontset'] = 'custom'
