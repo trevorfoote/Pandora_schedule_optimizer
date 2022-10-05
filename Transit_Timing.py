@@ -1,9 +1,4 @@
-from mpl_toolkits import mplot3d
 import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-
 import pandas as pd
 from astropy import units as u
 from astropy.coordinates import SkyCoord
@@ -11,61 +6,135 @@ from astropy.time import Time
 from datetime import datetime, timedelta
 import barycorr #.py file stored in same location as jupyter notebook
 
-mpl.rcParams['xtick.major.size'] = 10
-mpl.rcParams['xtick.major.width'] = 3
-mpl.rcParams['xtick.minor.size'] = 5
-mpl.rcParams['xtick.minor.width'] = 1
-mpl.rcParams['ytick.major.size'] = 10
-mpl.rcParams['ytick.major.width'] = 3
-mpl.rcParams['mathtext.fontset'] = 'custom'
-mpl.rcParams['axes.labelweight'] = 'bold'
-mpl.rcParams['font.weight'] = 'bold'
-mpl.rcParams['font.size'] = 18
-mpl.rcParams['axes.linewidth'] = 6
-plt.rcParams['font.size'] = '18'
-
-def transit_timing(input_dir, target_file, output_dir, obs_start, obs_stop):
+def transit_timing(fdir, target_list, target_name, output_dir):
     """ Determine primary transits for target(s) during Pandora's science 
     observation lifetime.
         
     Parameters
     ----------
-    input_dir:      string
-                    directory containing input files 
-    target_file:    string
+    fdir:           string
+                    high level directory 
+    target_list:    string
                     name of csv file with list of targets
-    gmat_file:      string
-                    name of txt file from GMAT containing time and positions
-                    of Pandora, Sun, Moon, and Earth
+    target_name:    string
+                    name of target planet
     output_dir:     string
                     directory where to save output csv and plots
-    obs_start:      string
-                    Date and time of start of Pandora science observing 
-                    ex. '2025-04-25 00:00:00.000'
-    obs_stop:      string
-                    Date and time of end of Pandora science observing 
-                    ex. '2026-04-25 00:00:00.000'
                                     
     Returns
     -------
     csv file
         file containing target's transits during Pandora's lifetime
-    plot
-        plot of transits schedule for year
     """
 
-### Create an array of Pandora's science observation year with exactly 1 min spacings
-    sci_start = Time(obs_start, format='iso', scale='utc') #Pandora science start in Greg_UTC
-    sci_stop  = Time(obs_stop, format='iso', scale='utc') #Pandora science stop in Greg_UTC
-    t_iso_utc = np.arange(sci_start, sci_stop+(1*u.minute), 1*u.minute)
-    t_mjd_utc = t_iso_utc
-    for i in range(len(t_iso_utc)):
-        t_mjd_utc[i] = t_iso_utc[i].mjd
+### Read in Visibility Data
+    data = pd.read_csv(fdir + 'Results/' + target_name + '/' + \
+                    'Visibility for ' + target_name + '.csv', sep=',')
+    t_mjd_utc = data['Time(MJD_UTC)']
+    Visible = np.array(data['Visible'])
 
-    # Create a time array in Gregarian that can be used in matplotlib
-    T_mjd_utc = np.array(list(t_mjd_utc[:]))
-    T_mjd_utc = Time(T_mjd_utc, format='mjd', scale= 'utc')
+    # Convert time to datetime
+    T_mjd_utc = Time(t_mjd_utc, format='mjd', scale='utc')
+    T_iso_utc = T_mjd_utc.iso
+    T_iso_utc = Time(T_iso_utc, format='iso', scale='utc')
+    dt_iso_utc = T_iso_utc.to_value('datetime')
 
-    T_iso_utc =[]
-    for i in range(len(T_mjd_utc)):
-        T_iso_utc.append(datetime.strptime(T_mjd_utc.iso[i], '%Y-%m-%d %H:%M:%S.%f'))
+
+### Extract planet specific parameters from target list
+    target_data = pd.read_csv(fdir + target_list, sep=',')
+    target_name_sc = target_data.loc[target_data['Planet Name'] == target_name,
+                                'Simbad Name'].iloc[0]
+    target_sc = SkyCoord.from_name(target_name_sc)
+
+    transit_dur = target_data.loc[target_data['Planet Name'] == target_name, 
+                            'Transit Duration (hrs)'].iloc[0] * u.hour
+    period = target_data.loc[target_data['Planet Name'] == target_name, 
+                            'Period (day)'].iloc[0] *u.day
+                            
+    epoch_BJD_TDB = target_data.loc[target_data['Planet Name'] == target_name, 
+                'Transit Epoch (BJD_TDB-2400000.5)'].iloc[0]+2400000.5
+    epoch_JD_UTC = barycorr.bjd2utc(epoch_BJD_TDB, target_sc.ra.degree, target_sc.dec.degree)
+    epoch_JD_UTC = Time(epoch_JD_UTC, format='jd', scale= 'utc')
+    epoch_MJD_UTC = epoch_JD_UTC.mjd
+    epoch_MJD_UTC = Time(epoch_MJD_UTC, format='mjd', scale='utc')
+
+
+### Calculate transit times
+    # Calculate Pre mid-transit time on target
+    half_obs_width = 0.75*u.hour + \
+        np.maximum((1.*u.hour+transit_dur/2), transit_dur)
+
+    # Determine minimum number of periods between Epoch and Pandora start of observing run
+    min_start_epoch = epoch_MJD_UTC-half_obs_width
+    min_pers_start = np.ceil((T_mjd_utc[0]-min_start_epoch)/period)
+
+    # Calculate first transit within Pandora lifetime
+    first_transit = epoch_MJD_UTC+(min_pers_start*period)
+
+    # Calc transit times
+    Mid_transits = np.arange(first_transit, T_mjd_utc[-1], period)
+    for i in range(len(Mid_transits)):
+        Mid_transits[i] = Mid_transits[i].mjd
+    Mid_transits = (np.array(list(Mid_transits[:])))
+    Mid_transits = Time(Mid_transits, format='mjd', scale= 'utc')
+
+    Start_transits = Mid_transits-transit_dur/2
+    End_transits = Mid_transits+transit_dur/2
+    Start_obs = Mid_transits-half_obs_width
+    End_obs = Mid_transits+half_obs_width
+
+    start_transits = Start_transits.to_value('datetime')
+    end_transits = End_transits.to_value('datetime')
+    start_obs = Start_obs.to_value('datetime')
+    end_obs = End_obs.to_value('datetime')
+
+    # Truncate everything after the minutes place
+    for i in range(len(Start_transits)):
+        start_transits[i] = start_transits[i] - timedelta(seconds=start_transits[i].second,
+                                        microseconds=start_transits[i].microsecond)
+        end_transits[i] = end_transits[i] - timedelta(seconds=end_transits[i].second,
+                                        microseconds=end_transits[i].microsecond)
+        start_obs[i] = start_obs[i] - timedelta(seconds=start_obs[i].second,
+                                        microseconds=start_obs[i].microsecond)
+        end_obs[i] = end_obs[i] - timedelta(seconds=end_obs[i].second,
+                                        microseconds=end_obs[i].microsecond)
+    all_transits = np.arange(len(start_transits))
+
+
+### Calculate which transits are visible to Pandora
+    dt_vis_times = [] 
+    for i in range(len(dt_iso_utc)):
+        if Visible[i] == 1.0:
+            dt_vis_times.append(dt_iso_utc[i])
+
+    obs_coverage = np.zeros(len(start_obs))
+    transit_coverage = np.zeros(len(start_transits))
+
+    for i in range(len(start_obs)):
+        temp = pd.date_range(start_obs[i], end_obs[i], freq='min')
+        obs_rng = temp.to_pydatetime()
+
+        temp = pd.date_range(start_transits[i], end_transits[i], freq='min')
+        tran_rng = temp.to_pydatetime()
+        
+        oset = set(obs_rng)
+        tset = set(tran_rng)
+        obs_test = oset.intersection(dt_vis_times)
+        tran_test = tset.intersection(dt_vis_times)
+        
+        if len(obs_test)>0 and len(tran_test)>0:
+            obs_coverage[i] = len(obs_test)/len(obs_rng)
+            transit_coverage[i] = len(tran_test)/len(tran_rng)
+        else:
+            continue
+    
+
+### Save transit data to Visibility file
+    transit_data = np.vstack((all_transits, Start_transits.value, Mid_transits.value, End_transits.value, Start_obs.value, End_obs.value, obs_coverage, transit_coverage))
+    transit_data = transit_data.T.reshape(-1, 8)
+    df1 = data[['Time(MJD_UTC)','Earth_Clear','Moon_Clear','Sun_Clear','Visible']].copy()
+    df2 = pd.DataFrame(transit_data, columns = ['All_Transits','Transit_Start','Transit_Mid','Transit_Stop','Observation_Start','Observation_Stop','Observation_Coverage','Transit_Coverage'])
+    result = pd.concat([df1,df2], axis=1)
+
+    output_file_name = target_name + '/' + 'Visibility for ' + target_name + '.csv'
+    result.to_csv((output_dir + output_file_name), sep=',', index=False)
