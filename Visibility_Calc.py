@@ -6,16 +6,16 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 
-def target_vis(input_dir, target_file, gmat_file, output_dir, \
+def target_vis(fdir, target_list, gmat_file, output_dir, \
     sun_block, moon_block, earth_block, obs_start, obs_stop):
     """ Determine visibility for target(s) with Pandora given avoidance angles
     for Sun, Moon, and Earth limb.
         
     Parameters
     ----------
-    input_dir:      string
+    fdir:      string
                     directory containing input files 
-    target_file:    string
+    target_list:    string
                     name of csv file with list of targets
     gmat_file:      string
                     name of txt file from GMAT containing time and positions
@@ -58,7 +58,7 @@ def target_vis(input_dir, target_file, gmat_file, output_dir, \
 
 ### Read in GMAT results
     print('Importing GMAT data')
-    df = pd.read_csv(input_dir+gmat_file, sep='\t')
+    df = pd.read_csv(fdir+gmat_file, sep='\t')
 
     # Trim dataframe to slightly larger than date range of 
     # Pandora science lifetime defined as obs_start and obs_stop
@@ -158,12 +158,13 @@ def target_vis(input_dir, target_file, gmat_file, output_dir, \
     # Earth_constraint = np.arctan((1.*u.earthRad)/(1.*u.earthRad+Pandora_alt)).to(u.deg)
 
 ### Import Target list
-    target_list = pd.read_csv(input_dir + target_file, sep=',')
-
+    target_data = pd.read_csv(fdir + target_list, sep=',')
+    
     #Cycle through targets
-    for i in range(len(target_list['Simbad Name'])):
-        target_name = target_list['Simbad Name'][i]
-        target_sc = SkyCoord.from_name(target_name)
+    for i in range(len(target_data['Simbad Name'])):
+        target_name = target_data['Planet Name'][i]
+        target_name_sc = target_data['Simbad Name'][i]
+        target_sc = SkyCoord.from_name(target_name_sc)
         print('Analyzing constraints for:', target_name)
 
         #Evaluate at each time step whether target is blocked by each contraints
@@ -188,8 +189,8 @@ def target_vis(input_dir, target_file, gmat_file, output_dir, \
         #Save results for each planet to csv file
         data = np.vstack((t_mjd_utc, Earth_req, Moon_req, Sun_req, all_req))
         data = data.T.reshape(-1,5)
-        
+        df1 = pd.DataFrame(data, columns = ['Time(MJD_UTC),Earth_Clear,Moon_Clear,Sun_Clear,Visible'])
+
         output_file_name = 'Visibility for %s.csv' %target_name
         print('Saving results to ', save_dir)
-        np.savetxt((save_dir + output_file_name), data, delimiter=',',
-                header='Time(MJD_UTC),Earth_Clear,Moon_Clear,Sun_Clear,Visible', comments='')
+        df1.to_csv((save_dir + output_file_name), sep=',', index=False)
