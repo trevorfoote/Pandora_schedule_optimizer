@@ -189,7 +189,7 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
         #Save results for each planet to csv file
         data = np.vstack((t_mjd_utc, Earth_req, Moon_req, Sun_req, all_req))
         data = data.T.reshape(-1,5)
-        df1 = pd.DataFrame(data, columns = ['Time(MJD_UTC),Earth_Clear,Moon_Clear,Sun_Clear,Visible'])
+        df1 = pd.DataFrame(data, columns = ['Time(MJD_UTC)','Earth_Clear','Moon_Clear','Sun_Clear','Visible'])
 
         output_file_name = 'Visibility for %s.csv' %target_name
         print('Saving results to ', save_dir)
