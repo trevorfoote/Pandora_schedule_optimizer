@@ -179,8 +179,8 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
 ### Evaluate at each time step whether Pandora is crossing SAA
     # SAA coordinates at altitude of ~500km
     saa_lat_max = 0. * u.deg
-    saa_lat_min = -50. * u.deg
-    saa_lon_max = 40. * u.deg
+    saa_lat_min = -40. * u.deg
+    saa_lon_max = 30. * u.deg
     saa_lon_min = -90. * u.deg
     saa_cross   = np.zeros(len(p_lat))
     for i in range(len(p_lat)):
@@ -192,10 +192,13 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
 ### Import Target list
     target_data = pd.read_csv(fdir + target_list, sep=',')
     
-    #Cycle through targets
-    for i in range(len(target_data['Simbad Name'])):
-        target_name    = target_data['Planet Name'][i]
-        target_name_sc = target_data['Simbad Name'][i]
+    #Cycle through host star targets
+    # for i in range(len(target_data['Simbad Name'])):
+    #     target_name    = target_data['Planet Name'][i]
+    #     target_name_sc = target_data['Simbad Name'][i]
+    for i in range(len(target_data['Star Simbad Name'])):
+        target_name    = target_data['Star Name'][i]
+        target_name_sc = target_data['Star Simbad Name'][i]
         target_sc      = SkyCoord.from_name(target_name_sc)
         print('Analyzing constraints for:', target_name)
 
