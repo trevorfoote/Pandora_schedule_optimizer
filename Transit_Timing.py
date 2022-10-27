@@ -1,12 +1,13 @@
+import os
 import numpy as np
 import pandas as pd
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
-from datetime import datetime, timedelta
+from datetime import timedelta
 import barycorr #.py file stored in same location as jupyter notebook
 
-def transit_timing(fdir, target_list, target_name, output_dir):
+def transit_timing(fdir, target_list, planet_name, star_name, output_dir):
     """ Determine primary transits for target(s) during Pandora's science 
     observation lifetime.
         
@@ -16,8 +17,10 @@ def transit_timing(fdir, target_list, target_name, output_dir):
                     high level directory 
     target_list:    string
                     name of csv file with list of targets
-    target_name:    string
+    planet_name:    string
                     name of target planet
+    star_name:      string
+                    name of target planet's host star
     output_dir:     string
                     directory where to save output csv and plots
                                     
@@ -28,8 +31,8 @@ def transit_timing(fdir, target_list, target_name, output_dir):
     """
 
 ### Read in Visibility Data
-    data = pd.read_csv(fdir + 'Results/' + target_name + '/' + \
-                    'Visibility for ' + target_name + '.csv', sep=',')
+    data = pd.read_csv(fdir + 'Results/' + star_name + '/' + \
+                    'Visibility for ' + star_name + '.csv', sep=',')
     t_mjd_utc = data['Time(MJD_UTC)']
     Visible = np.array(data['Visible'])
 
@@ -42,18 +45,18 @@ def transit_timing(fdir, target_list, target_name, output_dir):
 
 ### Extract planet specific parameters from target list
     target_data = pd.read_csv(fdir + target_list, sep=',')
-    target_name_sc = target_data.loc[target_data['Planet Name'] == target_name,
-                                'Simbad Name'].iloc[0]
-    target_sc = SkyCoord.from_name(target_name_sc)
+    planet_name_sc = target_data.loc[target_data['Planet Name'] == planet_name,
+                                'Planet Simbad Name'].iloc[0]
+    planet_sc = SkyCoord.from_name(planet_name_sc)
 
-    transit_dur = target_data.loc[target_data['Planet Name'] == target_name, 
+    transit_dur = target_data.loc[target_data['Planet Name'] == planet_name, 
                             'Transit Duration (hrs)'].iloc[0] * u.hour
-    period = target_data.loc[target_data['Planet Name'] == target_name, 
+    period = target_data.loc[target_data['Planet Name'] == planet_name, 
                             'Period (day)'].iloc[0] *u.day
                             
-    epoch_BJD_TDB = target_data.loc[target_data['Planet Name'] == target_name, 
+    epoch_BJD_TDB = target_data.loc[target_data['Planet Name'] == planet_name, 
                 'Transit Epoch (BJD_TDB-2400000.5)'].iloc[0]+2400000.5
-    epoch_JD_UTC = barycorr.bjd2utc(epoch_BJD_TDB, target_sc.ra.degree, target_sc.dec.degree)
+    epoch_JD_UTC = barycorr.bjd2utc(epoch_BJD_TDB, planet_sc.ra.degree, planet_sc.dec.degree)
     epoch_JD_UTC = Time(epoch_JD_UTC, format='jd', scale= 'utc')
     epoch_MJD_UTC = epoch_JD_UTC.mjd
     epoch_MJD_UTC = Time(epoch_MJD_UTC, format='mjd', scale='utc')
@@ -128,13 +131,19 @@ def transit_timing(fdir, target_list, target_name, output_dir):
         else:
             continue
     
+    #Check if folder exists for planet and if not create new folder for 
+    #output products
+    save_dir = output_dir + star_name + '/' + planet_name + '/'
+    if os.path.exists(save_dir) != True:
+        os.makedirs(save_dir)
 
 ### Save transit data to Visibility file
     transit_data = np.vstack((all_transits, Start_transits.value, Mid_transits.value, End_transits.value, Start_obs.value, End_obs.value, obs_coverage, transit_coverage))
     transit_data = transit_data.T.reshape(-1, 8)
-    df1 = data[['Time(MJD_UTC)','Earth_Clear','Moon_Clear','Sun_Clear','Visible']].copy()
-    df2 = pd.DataFrame(transit_data, columns = ['All_Transits','Transit_Start','Transit_Mid','Transit_Stop','Observation_Start','Observation_Stop','Observation_Coverage','Transit_Coverage'])
-    result = pd.concat([df1,df2], axis=1)
+    # df1 = data[['Time(MJD_UTC)','Earth_Clear','Moon_Clear','Sun_Clear','Visible']].copy()
+    # df2 = pd.DataFrame(transit_data, columns = ['All_Transits','Transit_Start','Transit_Mid','Transit_Stop','Observation_Start','Observation_Stop','Observation_Coverage','Transit_Coverage'])
+    # result = pd.concat([df1,df2], axis=1)
 
-    output_file_name = target_name + '/' + 'Visibility for ' + target_name + '.csv'
-    result.to_csv((output_dir + output_file_name), sep=',', index=False)
+    output_file_name = 'Visibility for ' + planet_name + '.csv'
+    # result.to_csv((save_dir + output_file_name), sep=',', index=False)
+    df2.to_csv((save_dir + output_file_name), sep=',', index=False)
