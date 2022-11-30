@@ -6,22 +6,20 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 
-def target_vis(fdir, target_list, gmat_file, output_dir, \
+def target_vis(fdir, target_list, gmat_file, \
     sun_block, moon_block, earth_block, obs_start, obs_stop):
     """ Determine visibility for target(s) with Pandora given avoidance angles
     for Sun, Moon, and Earth limb.
         
     Parameters
     ----------
-    fdir:      string
+    fdir:           string
                     directory containing input files 
     target_list:    string
                     name of csv file with list of targets
     gmat_file:      string
                     name of txt file from GMAT containing time and positions
                     of Pandora, Sun, Moon, and Earth
-    output_dir:     string
-                    directory where to save output csv and plots
     sun_block:      float
                     Avoidance angle for the Sun
     moon_block:     float
@@ -30,10 +28,10 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
                     Avoidance angle for the Earth limb
     obs_start:      string
                     Date and time of start of Pandora science observing 
-                    ex. '2025-04-25 00:00:00.000'
+                    ex. '2025-04-25 00:00:00'
     obs_stop:      string
                     Date and time of end of Pandora science observing 
-                    ex. '2026-04-25 00:00:00.000'
+                    ex. '2026-04-25 00:00:00'
                                     
     Returns
     -------
@@ -43,17 +41,9 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
 
 ### Create an array of Pandora's science observation year with exactly 1 min spacings
     # datetime 
-    Dt_iso_utc = pd.date_range(obs_start, obs_stop, freq='min')
-    Dt_iso_utc = Dt_iso_utc.to_pydatetime()
-    Dt_iso_utc = Time(Dt_iso_utc, format='datetime', scale='utc')
-
-    # iso 
-    t_iso_utc  = Dt_iso_utc.to_value('iso')
-    T_iso_utc  = Time(t_iso_utc, format='iso', scale='utc')
-
-    # mjd 
-    t_mjd_utc  = T_iso_utc.to_value('mjd')
-    T_mjd_utc  = Time(t_mjd_utc, format='mjd', scale='utc')
+    dt_iso_utc = pd.date_range(obs_start, obs_stop, freq='min')
+    t_jd_utc  = Time(dt_iso_utc.to_julian_date(), format='jd', scale='utc').value
+    t_mjd_utc = Time(t_jd_utc-2400000.5, format='mjd', scale='utc').value
 
 
 ### Read in GMAT results
@@ -62,18 +52,14 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
 
     # Trim dataframe to slightly larger than date range of 
     # Pandora science lifetime defined as obs_start and obs_stop
-    gmat_data = gmat_data[(gmat_data['Earth.UTCModJulian']>=(T_mjd_utc.jd[0]-2430000.0)-0.0007) & 
-            (gmat_data['Earth.UTCModJulian']<=(T_mjd_utc.jd[-1]-2430000.0)+0.0007)]
+    gmat_data = gmat_data[(gmat_data['Earth.UTCModJulian']>=(t_jd_utc[0]-2430000.0)-0.0007) & 
+            (gmat_data['Earth.UTCModJulian']<=(t_jd_utc[-1]-2430000.0)+0.0007)]
 
 
 ### Convert GMAT times into standard MJD_UTC
     # Note: GMAT uses different offset for it's MJD (uses 2,430,000.0 rather than 2,400,000.5)
     # Time
-    GMAT_jd_utc  = np.array(gmat_data['Earth.UTCModJulian']) + 2430000.0
-    GMAT_jd_utc  = Time(GMAT_jd_utc, format='jd', scale='utc')
-    GMAT_mjd_utc = Time(GMAT_jd_utc.mjd, format='mjd', scale='utc')
-    gmat_mjd_utc = GMAT_mjd_utc.to_value('mjd')
-
+    gmat_mjd_utc =np.array(gmat_data['Earth.UTCModJulian']) + 2430000.0 - 2400000.5
 
 ### Extract GMAT positions in MJ2000 Earth fixed cartesian coordinates
     # Earth
@@ -102,7 +88,6 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
 
 
 ### Interpolate all positions from GMAT to map to 1 minute intervals
-    print('Interpolating locations at 1 minute intervals')
     # Earth
     ex = np.interp(t_mjd_utc, gmat_mjd_utc, gmat_ex)
     ey = np.interp(t_mjd_utc, gmat_mjd_utc, gmat_ey)
@@ -168,9 +153,9 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
     pp = SkyCoord(x=pxx, y=pyy, z=pzz, unit='km', representation_type='cartesian')
 
 ### Define Constraints for each Solar system body
-    Sun_constraint = sun_block * u.deg
-    Moon_constraint = moon_block * u.deg
-    Earth_constraint = earth_block *u.deg #based on worst case orbital alt of 450km should be 63 deg
+    Sun_constraint   =   sun_block * u.deg
+    Moon_constraint  =  moon_block * u.deg
+    Earth_constraint = earth_block * u.deg #based on worst case orbital alt of 450km should be 63 deg
 
     #Could be more robust to pull altitude from each time step but need to investigate
     # Pandora_alt = 450
@@ -178,9 +163,9 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
 
 ### Evaluate at each time step whether Pandora is crossing SAA
     # SAA coordinates at altitude of ~500km
-    saa_lat_max = 0. * u.deg
+    saa_lat_max =   0. * u.deg
     saa_lat_min = -40. * u.deg
-    saa_lon_max = 30. * u.deg
+    saa_lon_max =  30. * u.deg
     saa_lon_min = -90. * u.deg
     saa_cross   = np.zeros(len(p_lat))
     for i in range(len(p_lat)):
@@ -193,14 +178,11 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
     target_data = pd.read_csv(fdir + target_list, sep=',')
     
     #Cycle through host star targets
-    # for i in range(len(target_data['Simbad Name'])):
-    #     target_name    = target_data['Planet Name'][i]
-    #     target_name_sc = target_data['Simbad Name'][i]
     for i in range(len(target_data['Star Simbad Name'])):
-        target_name    = target_data['Star Name'][i]
-        target_name_sc = target_data['Star Simbad Name'][i]
-        target_sc      = SkyCoord.from_name(target_name_sc)
-        print('Analyzing constraints for:', target_name)
+        star_name    = target_data['Star Name'][i]
+        star_name_sc = target_data['Star Simbad Name'][i]
+        star_sc      = SkyCoord.from_name(star_name_sc)
+        print('Analyzing constraints for:', star_name)
 
         #Evaluate at each time step whether target is blocked by each contraints
         Sun_sep   = np.zeros(len(pp))
@@ -213,27 +195,31 @@ def target_vis(fdir, target_list, gmat_file, output_dir, \
         print('Calculating angular seperation requirements')
         pbar = ProgressBar()
         for i in pbar(range(len(pp))):
-            Sun_sep[i]   = ss[i].separation(target_sc).deg
+            Sun_sep[i]   = ss[i].separation(star_sc).deg
             Sun_req[i]   = Sun_sep[i]* u.deg > Sun_constraint
-            Moon_sep[i]  = mm[i].separation(target_sc).deg
+            Moon_sep[i]  = mm[i].separation(star_sc).deg
             Moon_req[i]  = Moon_sep[i]* u.deg > Moon_constraint
-            Earth_sep[i] = ee[i].separation(target_sc).deg
+            Earth_sep[i] = ee[i].separation(star_sc).deg
             Earth_req[i] = Earth_sep[i]* u.deg > Earth_constraint
         all_req = Sun_req * Moon_req * Earth_req
 
         #Check if folder exists for planet and if not create new folder for 
         #output products
-        save_dir = output_dir + target_name + '/'
+        save_dir = fdir + 'Targets/' + star_name + '/'
         if os.path.exists(save_dir) != True:
             os.makedirs(save_dir)
         
-        #Save results for each planet to csv file
-        data = np.vstack((t_mjd_utc, saa_cross, Earth_req, Moon_req, Sun_req, \
-            all_req, Earth_sep, Moon_sep, Sun_sep))
-        data = data.T.reshape(-1,9)
-        df1  = pd.DataFrame(data, columns = ['Time(MJD_UTC)','SAA_Crossing','Earth_Clear','Moon_Clear','Sun_Clear',\
-            'Visible','Earth_Sep','Moon_Sep','Sun_Sep'])
+        #Save results for each star to csv file
+        dt_iso_utc = pd.DataFrame(dt_iso_utc, columns=['Time(datetime)'])
+        t_mjd_utc = pd.DataFrame(t_mjd_utc, columns=['Time(MJD_UTC)'])
 
-        output_file_name = 'Visibility for %s.csv' %target_name
+        data = np.vstack((saa_cross, Earth_req, Moon_req, Sun_req, \
+            all_req, Earth_sep, Moon_sep, Sun_sep))
+        data = data.T.reshape(-1,8)
+        data  = pd.DataFrame(data, columns = ['SAA_Crossing','Earth_Clear','Moon_Clear','Sun_Clear',\
+            'Visible','Earth_Sep','Moon_Sep','Sun_Sep'])
+        df = pd.concat([dt_iso_utc, t_mjd_utc, data], axis=1)
+
+        output_file_name = 'Visibility for %s.csv' %star_name
         print('Saving results to ', save_dir)
-        df1.to_csv((save_dir + output_file_name), sep=',', index=False)
+        df.to_csv((save_dir + output_file_name), sep=',', index=False)
