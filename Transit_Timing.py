@@ -7,7 +7,7 @@ from astropy.time import Time
 from datetime import timedelta
 import barycorr #.py file stored in same location as jupyter notebook
 
-def transit_timing(fdir, target_list, planet_name, star_name, output_dir):
+def transit_timing(fdir, target_list, planet_name, star_name):
     """ Determine primary transits for target(s) during Pandora's science 
     observation lifetime.
         
@@ -21,8 +21,6 @@ def transit_timing(fdir, target_list, planet_name, star_name, output_dir):
                     name of target planet
     star_name:      string
                     name of target planet's host star
-    output_dir:     string
-                    directory where to save output csv and plots
                                     
     Returns
     -------
@@ -31,15 +29,14 @@ def transit_timing(fdir, target_list, planet_name, star_name, output_dir):
     """
 
 ### Read in Visibility Data
-    data = pd.read_csv(fdir + 'Results/' + star_name + '/' + \
+    star_data = pd.read_csv(fdir + 'Targets/' + star_name + '/' + \
                     'Visibility for ' + star_name + '.csv', sep=',')
-    t_mjd_utc = data['Time(MJD_UTC)']
-    Visible = np.array(data['Visible'])
+    t_mjd_utc = star_data['Time(MJD_UTC)']
+    Visible = np.array(star_data['Visible'])
 
     # Convert time to datetime
     T_mjd_utc = Time(t_mjd_utc, format='mjd', scale='utc')
-    T_iso_utc = T_mjd_utc.iso
-    T_iso_utc = Time(T_iso_utc, format='iso', scale='utc')
+    T_iso_utc = Time(T_mjd_utc.iso, format='iso', scale='utc')
     dt_iso_utc = T_iso_utc.to_value('datetime')
 
 
@@ -82,25 +79,17 @@ def transit_timing(fdir, target_list, planet_name, star_name, output_dir):
     Mid_transits = Time(Mid_transits, format='mjd', scale= 'utc')
 
     Start_transits = Mid_transits-transit_dur/2
-    End_transits = Mid_transits+transit_dur/2
-    Start_obs = Mid_transits-half_obs_width
-    End_obs = Mid_transits+half_obs_width
+    End_transits   = Mid_transits+transit_dur/2
 
     start_transits = Start_transits.to_value('datetime')
-    end_transits = End_transits.to_value('datetime')
-    start_obs = Start_obs.to_value('datetime')
-    end_obs = End_obs.to_value('datetime')
+    end_transits   = End_transits.to_value('datetime')
 
     # Truncate everything after the minutes place
-    for i in range(len(Start_transits)):
+    for i in range(len(start_transits)):
         start_transits[i] = start_transits[i] - timedelta(seconds=start_transits[i].second,
                                         microseconds=start_transits[i].microsecond)
-        end_transits[i] = end_transits[i] - timedelta(seconds=end_transits[i].second,
+        end_transits[i]   = end_transits[i] - timedelta(seconds=end_transits[i].second,
                                         microseconds=end_transits[i].microsecond)
-        start_obs[i] = start_obs[i] - timedelta(seconds=start_obs[i].second,
-                                        microseconds=start_obs[i].microsecond)
-        end_obs[i] = end_obs[i] - timedelta(seconds=end_obs[i].second,
-                                        microseconds=end_obs[i].microsecond)
     all_transits = np.arange(len(start_transits))
 
 
@@ -110,40 +99,29 @@ def transit_timing(fdir, target_list, planet_name, star_name, output_dir):
         if Visible[i] == 1.0:
             dt_vis_times.append(dt_iso_utc[i])
 
-    obs_coverage = np.zeros(len(start_obs))
     transit_coverage = np.zeros(len(start_transits))
-
-    for i in range(len(start_obs)):
-        temp = pd.date_range(start_obs[i], end_obs[i], freq='min')
-        obs_rng = temp.to_pydatetime()
-
-        temp = pd.date_range(start_transits[i], end_transits[i], freq='min')
-        tran_rng = temp.to_pydatetime()
+    for i in range(len(start_transits)):
+        tran_rng = pd.date_range(start_transits[i], end_transits[i], freq='min')
+        tran_rng = tran_rng.to_pydatetime()
         
-        oset = set(obs_rng)
         tset = set(tran_rng)
-        obs_test = oset.intersection(dt_vis_times)
         tran_test = tset.intersection(dt_vis_times)
         
-        if len(obs_test)>0 and len(tran_test)>0:
-            obs_coverage[i] = len(obs_test)/len(obs_rng)
+        if len(tran_test)>0:
             transit_coverage[i] = len(tran_test)/len(tran_rng)
         else:
             continue
     
     #Check if folder exists for planet and if not create new folder for 
     #output products
-    save_dir = output_dir + star_name + '/' + planet_name + '/'
+    save_dir =  fdir + 'Targets/' + star_name + '/' + planet_name + '/'
     if os.path.exists(save_dir) != True:
         os.makedirs(save_dir)
 
 ### Save transit data to Visibility file
-    transit_data = np.vstack((all_transits, Start_transits.value, Mid_transits.value, End_transits.value, Start_obs.value, End_obs.value, obs_coverage, transit_coverage))
-    transit_data = transit_data.T.reshape(-1, 8)
-    # df1 = data[['Time(MJD_UTC)','Earth_Clear','Moon_Clear','Sun_Clear','Visible']].copy()
-    # df2 = pd.DataFrame(transit_data, columns = ['All_Transits','Transit_Start','Transit_Mid','Transit_Stop','Observation_Start','Observation_Stop','Observation_Coverage','Transit_Coverage'])
-    # result = pd.concat([df1,df2], axis=1)
+    transit_data = np.vstack((all_transits, Start_transits.value, Mid_transits.value, End_transits.value, transit_coverage))
+    transit_data = transit_data.T.reshape(-1, 5)
+    df = pd.DataFrame(transit_data, columns = ['All_Transits','Transit_Start','Transit_Mid','Transit_Stop','Transit_Coverage'])
 
     output_file_name = 'Visibility for ' + planet_name + '.csv'
-    # result.to_csv((save_dir + output_file_name), sep=',', index=False)
-    df2.to_csv((save_dir + output_file_name), sep=',', index=False)
+    df.to_csv((save_dir + output_file_name), sep=',', index=False)
